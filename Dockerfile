@@ -1,11 +1,11 @@
 # Use the official Python image from the Docker Hub
-FROM python:3.10
+FROM python:3.10.16-bullseye
 
 # Set the working directory in the container
-WORKDIR /app
+WORKDIR .
 
 # Copy the entire application code into the container
-COPY ./app ./app
+COPY . .
 
 # Install dependencies
 RUN pip install -r requirements.txt
