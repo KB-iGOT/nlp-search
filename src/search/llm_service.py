@@ -40,14 +40,15 @@ def search_request(req_data):
     try:
         logger.info(req_data)
         query = req_data.query
-        if query.strip() == '':
-            return HTTPException(status_code=400, detail="Empty query string")
+        if query.strip() == '' or len(query) > settings.max_search_len:
+            return HTTPException(status_code=400, detail="Empty query string or query too long. Current max limit " + str(settings.max_search_len))
         synonym = False
         if req_data.synonyms:
             synonym = req_data.synonyms
         logger.info(query)
         response = llm_request(query, synonym)
-
+        if isinstance(response, Exception):
+            return response
         for keyword in response["keywords"]:
             logger.info(keyword)
         return {"data" : response}
@@ -73,4 +74,9 @@ def llm_request(query, synonym):
     for response in responses:
         res_text_designation += response.text
     logger.info(res_text_designation)
-    return json.loads(res_text_designation.replace('```','').replace('json', ''))
+    try:
+        return json.loads(res_text_designation.replace('```','').replace('json', ''))
+    except Exception as e:
+        logger.error(res_text_designation)
+        traceback.print_exc()
+        return HTTPException(status_code=500, detail="LLM response parsing issue")
