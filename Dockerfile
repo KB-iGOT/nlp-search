@@ -1,17 +1,18 @@
-# Use the official Python image from the Docker Hub
-FROM python:3.10.16-bullseye
+FROM python:3.12-slim
 
-# Set the working directory in the container
-WORKDIR .
+ENV VIRTUAL_ENV=/opt/venv
 
-# Copy the entire application code into the container
-COPY . .
+# Create a virtual environment
+RUN python -m venv $VIRTUAL_ENV
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
-# Install dependencies
-RUN pip install -r requirements.txt
+WORKDIR /app
 
-# Expose the port that the FastAPI app will run on
+COPY requirements.txt .
+RUN pip install uv && uv pip install --no-cache-dir -r requirements.txt
+
+COPY src /app/src/
+
 EXPOSE 8000
 
-# Command to run the FastAPI application using Uvicorn
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]

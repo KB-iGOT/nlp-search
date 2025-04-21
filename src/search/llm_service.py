@@ -1,15 +1,15 @@
+import os, json
 import traceback
-from fastapi.exceptions import HTTPException
-from src import config 
 import logging
+from fastapi.exceptions import HTTPException 
 import vertexai
 from vertexai.generative_models import GenerativeModel
-import os, json
 from functools import lru_cache
+from src import config
+from src.search.request_model import SearchModel
 
-logging.basicConfig()
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
 
 @lru_cache
 def get_settings():
@@ -19,64 +19,71 @@ settings = get_settings()
 if "GOOGLE_APPLICATION_CREDENTIALS" not in os.environ:
     os.environ["GOOGLE_APPLICATION_CREDENTIALS"]=settings.GOOGLE_APPLICATION_CREDENTIALS
 
-vertexai.init(project=settings.project, location=settings.location)
+vertexai.init(project=settings.GOOGLE_CLOUD_PROJECT, location=settings.GOOGLE_CLOUD_LOCATION)
 model = GenerativeModel(
-        settings.model,
+        settings.MODEL_NAME,
         system_instruction=[
             "You are a helpful language expert.",
-            "Your mission is to extract search keywords from queries.",
+            "Your mission is to extract search keywords from queries."
         ],
+        generation_config= {
+            "max_output_tokens": int(settings.MAX_OUTPUT_TOKENS),
+            "temperature": float(settings.TEMPERATURE),
+            "top_p": float(settings.TOP_P),
+            "top_k": int(settings.TOP_K)
+        }
 ) 
 
-generation_config = {
-    "max_output_tokens": settings.max_output_tokens,
-    "temperature": settings.temperature,
-    "top_p": settings.top_p,
-    "top_k": settings.top_k,
-}
-
-
-def search_request(req_data):
+def search_request(req_data: SearchModel):
     try:
-        logger.info(req_data)
-        query = req_data.query
-        if query.strip() == '' or len(query) > settings.max_search_len:
-            return HTTPException(status_code=400, detail="Empty query string or query too long. Current max limit " + str(settings.max_search_len))
-        synonym = False
-        if req_data.synonyms:
-            synonym = req_data.synonyms
-        logger.info(query)
-        response = llm_request(query, synonym)
+        logger.info(f"Received nlp serch request :: {req_data.model_dump()}")
+        
+        if not req_data.query.strip():
+            return HTTPException(status_code=400, detail="Query cannot be empty.")
+        
+        if len(req_data.query) > int(settings.MAX_SEARCH_LEN):
+            return HTTPException(status_code=400, detail=f"Query cannot be longer than {int(settings.MAX_SEARCH_LEN)} characters")
+            
+        response = llm_request(req_data)
         if isinstance(response, Exception):
             return response
-        for keyword in response["keywords"]:
-            logger.info(keyword)
+        
+        logger.info(f"Response :: {response}")
         return {"data" : response}
     except Exception as e:
+        logger.error(f"An unexpected error occurred: {e}")
         traceback.print_exc()
-        return HTTPException(status_code=400, detail="Error")
+        raise HTTPException(status_code=500, detail="Internal server error during request processing.")
     
 
-def llm_request(query, synonym):
+def llm_request(req_data: SearchModel):
     
-    prompt = settings.nlp_search_instruction_prompt + query + settings.nlp_search_example_prompt
-    logger.info(synonym)
-    if synonym:
+    prompt = settings.NLP_SEARCH_INSTRUCTION_PROMPT + req_data.query + settings.NPL_SEARCH_EXAMPLE_PROMPT
+    
+    if req_data.synonyms:
         prompt = prompt.replace(']' , '] \n Add synonym for keywords wherever possible.')
-    logger.info(prompt)
+    
+    logger.info(f"Final prompt :: {prompt}")
+
     responses = model.generate_content(
         prompt,
-        generation_config=generation_config,
         #safety_settings=safety_settings,
-        stream=True,
+        stream=True
     )
     res_text_designation = ""
     for response in responses:
         res_text_designation += response.text
-    logger.info(res_text_designation)
+    
+    logger.info(f"Model Response :: {res_text_designation}")
+    
     try:
         return json.loads(res_text_designation.replace('```','').replace('json', ''))
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to decode LLM response: {res_text_designation}")
+        logger.error(f"JSONDecodeError: {e}")
+        return HTTPException(status_code=500, detail="Failed to process the query. Please try again later!")
     except Exception as e:
+        logger.error(f"An unexpected error occurred during LLM processing: {e}")
         logger.error(res_text_designation)
         traceback.print_exc()
-        return HTTPException(status_code=500, detail="LLM response parsing issue")
+        return HTTPException(status_code=500, detail="Failed to process the query. Please try again later!")
