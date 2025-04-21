@@ -11,5 +11,6 @@ class Settings(BaseSettings):
     top_p: float
     top_k: float
     GOOGLE_APPLICATION_CREDENTIALS: str
+    max_search_len: int
     class Config:
         env_file = ".env"

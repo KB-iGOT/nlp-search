@@ -1,11 +1,14 @@
 import traceback
 from fastapi.exceptions import HTTPException
 from src import config 
-
+import logging
 import vertexai
 from vertexai.generative_models import GenerativeModel
 import os, json
 from functools import lru_cache
+
+logging.basicConfig()
+logger = logging.getLogger(__name__)
 
 
 @lru_cache
@@ -35,16 +38,19 @@ generation_config = {
 
 def search_request(req_data):
     try:
-        print(req_data)
+        logger.info(req_data)
         query = req_data.query
+        if query.strip() == '' or len(query) > settings.max_search_len:
+            return HTTPException(status_code=400, detail="Empty query string or query too long. Current max limit " + str(settings.max_search_len))
         synonym = False
         if req_data.synonyms:
             synonym = req_data.synonyms
-        print(query)
+        logger.info(query)
         response = llm_request(query, synonym)
-
+        if isinstance(response, Exception):
+            return response
         for keyword in response["keywords"]:
-            print(keyword)
+            logger.info(keyword)
         return {"data" : response}
     except Exception as e:
         traceback.print_exc()
@@ -54,10 +60,10 @@ def search_request(req_data):
 def llm_request(query, synonym):
     
     prompt = settings.nlp_search_instruction_prompt + query + settings.nlp_search_example_prompt
-    print(synonym)
+    logger.info(synonym)
     if synonym:
         prompt = prompt.replace(']' , '] \n Add synonym for keywords wherever possible.')
-    print(prompt)
+    logger.info(prompt)
     responses = model.generate_content(
         prompt,
         generation_config=generation_config,
@@ -67,5 +73,10 @@ def llm_request(query, synonym):
     res_text_designation = ""
     for response in responses:
         res_text_designation += response.text
-    print(res_text_designation)
-    return json.loads(res_text_designation.replace('```','').replace('json', ''))
+    logger.info(res_text_designation)
+    try:
+        return json.loads(res_text_designation.replace('```','').replace('json', ''))
+    except Exception as e:
+        logger.error(res_text_designation)
+        traceback.print_exc()
+        return HTTPException(status_code=500, detail="LLM response parsing issue")
