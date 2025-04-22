@@ -57,6 +57,8 @@ pip install uv && uv pip install -r requirements.txt
    GOOGLE_CLOUD_LOCATION=YOUR_CLOUD_LOCATION_NAME_HERE
    GOOGLE_CLOUD_PROJECT=YOUR_ROJECT_NAME_HERE
    GOOGLE_APPLICATION_CREDENTIALS=YOUR_GOOGLE_CREDENTIALS_FILEPATH_HERE
+
+   WEB_CONCURRENCY=Number of worker processes
    ```
 
    You can find further configuration parameters in `src/config.py`. This incudes parameters such as prompt, max search length and llm model used by the service.
