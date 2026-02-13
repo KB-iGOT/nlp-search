@@ -46,7 +46,6 @@ The application is configured via environment variables. Create a `.env` file in
 | `model` | Vertex AI Generative Model Name | `gemini-2.5-flash` |
 | `PROMPT_VERSION` | Version of the prompt to use | `latest` or `v1` |
 | `GOOGLE_APPLICATION_CREDENTIALS` | Path to Service Account JSON key | `creds/service-account.json` |
-
 | `max_output_tokens` | Max tokens for generation | `1024` |
 | `temperature` | LLM Temperature (creativity) | `0.1` |
 | `top_p` | Nucleus sampling parameter | `0.9` |
