@@ -84,7 +84,21 @@ curl -X 'POST' \
 }'
 ```
 
+### Automated Tests
+
+The project includes a `pytest` suite for API and security verification.
+
+1.  Install test dependencies:
+    ```bash
+    pip install -r requirements.txt
+    ```
+2.  Run tests:
+    ```bash
+    pytest
+    ```
+
 ### Docker
+
 
 1.  **Build the image:**
 
