@@ -136,8 +136,18 @@ The project includes a `pytest` suite for API and security verification.
 ```json
 {
   "data": {
-    "keywords": ["machine learning", "data"],
-    "synonyms": ["ML", "artificial intelligence", "datasets"]
+    "keywords": [
+      {
+        "keyword": "machine learning",
+        "priority": 1,
+        "synonyms": ["ML", "artificial intelligence"]
+      },
+      {
+        "keyword": "data",
+        "priority": 2,
+        "synonyms": ["datasets", "statistics"]
+      }
+    ]
   }
 }
 ```
