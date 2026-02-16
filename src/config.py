@@ -1,17 +1,17 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
-    model : str
+    MODEL : str = "gemini-2.5-flash"
     PROMPT_VERSION: str = "latest"
 
 
-    project: str
-    location: str
-    max_output_tokens: int
-    temperature: float
-    top_p: float
-    top_k: float
+    PROJECT: str
+    LOCATION: str
+    MAX_OUTPUT_TOKENS: int
+    TEMPERATURE: float
+    TOP_P: float
+    TOP_K: float
     GOOGLE_APPLICATION_CREDENTIALS: str
-    max_search_len: int
+    MAX_SEARCH_LEN: int
     class Config:
         env_file = ".env"

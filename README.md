@@ -41,16 +41,16 @@ The application is configured via environment variables. Create a `.env` file in
 
 | Variable | Description | Example |
 | :--- | :--- | :--- |
-| `project` | GCP Project ID | `my-gcp-project-id` |
-| `location` | GCP Region for Vertex AI | `asia-south1` |
-| `model` | Vertex AI Generative Model Name | `gemini-2.5-flash` |
+| `MODEL` | Vertex AI Generative Model Name | `gemini-2.5-flash` |
+| `PROJECT` | GCP Project ID | `my-gcp-project-id` |
+| `LOCATION` | GCP Region for Vertex AI | `asia-south1` |
 | `PROMPT_VERSION` | Version of the prompt to use | `latest` or `v1` |
 | `GOOGLE_APPLICATION_CREDENTIALS` | Path to Service Account JSON key | `creds/service-account.json` |
-| `max_output_tokens` | Max tokens for generation | `1024` |
-| `temperature` | LLM Temperature (creativity) | `0.1` |
-| `top_p` | Nucleus sampling parameter | `0.9` |
-| `top_k` | Top-K sampling parameter | `40` |
-| `max_search_len` | Maximum allowed query length | `200` |
+| `MAX_OUTPUT_TOKENS` | Max tokens for generation | `1024` |
+| `TEMPERATURE` | LLM Temperature (creativity) | `0.1` |
+| `TOP_P` | Nucleus sampling parameter | `0.9` |
+| `TOP_K` | Top-K sampling parameter | `40` |
+| `MAX_SEARCH_LEN` | Maximum allowed query length | `500` |
 
 ### Credentials
 Place your Google Cloud Service Account JSON key file in the `creds/` directory (or wherever `GOOGLE_APPLICATION_CREDENTIALS` points to).

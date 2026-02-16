@@ -26,9 +26,9 @@ prompts = get_prompts()
 if "GOOGLE_APPLICATION_CREDENTIALS" not in os.environ:
     os.environ["GOOGLE_APPLICATION_CREDENTIALS"]=settings.GOOGLE_APPLICATION_CREDENTIALS
 
-vertexai.init(project=settings.project, location=settings.location)
+vertexai.init(project=settings.PROJECT, location=settings.LOCATION)
 model = GenerativeModel(
-        settings.model,
+        settings.MODEL,
         system_instruction=[
             "You are a helpful language expert.",
             "Your mission is to extract search keywords from queries.",
@@ -36,10 +36,10 @@ model = GenerativeModel(
 ) 
 
 generation_config = {
-    "max_output_tokens": settings.max_output_tokens,
-    "temperature": settings.temperature,
-    "top_p": settings.top_p,
-    "top_k": settings.top_k,
+    "max_output_tokens": settings.MAX_OUTPUT_TOKENS,
+    "temperature": settings.TEMPERATURE,
+    "top_p": settings.TOP_P,
+    "top_k": settings.TOP_K,
     "response_mime_type": "application/json",
     "response_schema": {
         "type": "OBJECT",
@@ -68,8 +68,8 @@ def search_request(req_data):
     try:
         logger.info(req_data)
         query = req_data.query
-        if query.strip() == '' or len(query) > settings.max_search_len:
-            return HTTPException(status_code=400, detail="Empty query string or query too long. Current max limit " + str(settings.max_search_len))
+        if query.strip() == '' or len(query) > settings.MAX_SEARCH_LEN:
+            return HTTPException(status_code=400, detail="Empty query string or query too long. Current max limit " + str(settings.MAX_SEARCH_LEN))
         synonym = False
         if req_data.synonyms:
             synonym = req_data.synonyms
