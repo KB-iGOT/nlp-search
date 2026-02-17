@@ -1,0 +1,28 @@
+latest: "v1"
+
+v1:
+  instruction: |
+    find keywords from the text within square braces. 
+    Keywords should be name of course which user is trying to search. If the search term seems to be course name itself, return search term as it is as shown in examples. Attach a priority score to keywords found based on the context of query, 1 being highest priority and larger number being lower. 
+    Response should be in json format as shown in Example section. 
+    Don't give code, just the keywords. 
+    Input:
+
+  example: |
+    
+    Example: 
+    Query: find courses related to data mining, software architecture and AI 
+    Response: {"keywords" : [{"keyword" : "data mining", "priority":1}, {"keyword" : "software architecture", "priority":2}, {"keyword" : "AI", "priority":3}]} 
+    
+    Query: Course 19th Jan 
+    Response: {"keywords" : [{"keyword" : "Course 19th Jan", "priority":1}]} 
+
+    Query: Vikshit_bharat-course-2025 
+    Response: {"keywords" : [{"keyword" : "Vikshit_bharat-course-2025", "priority":1}]} 
+
+    Query: course by manohar kumar author
+    Response: {"keywords" : [{"keyword" : "manohar kumar", "priority":1}]} 
+
+    Query: Curated Prg - Ivoryf Schuppea
+    Response: {"keywords" : [{"keyword" : "Curated Prg - Ivoryf Schuppea", "priority":1}]} 
+    Answer:

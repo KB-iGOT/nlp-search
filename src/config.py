@@ -1,25 +1,17 @@
-import os
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field
 
 class Settings(BaseSettings):
+    MODEL : str = "gemini-2.5-flash"
+    PROMPT_VERSION: str = "latest"
 
-    model_config = SettingsConfigDict(
-        env_file=os.path.join(
-            os.path.dirname(os.path.abspath(__file__)), "../.env"
-        )
-    )
 
-    GOOGLE_CLOUD_PROJECT: str
-    GOOGLE_CLOUD_LOCATION: str = Field(default="us-central1")
+    PROJECT: str
+    LOCATION: str
+    MAX_OUTPUT_TOKENS: int
+    TEMPERATURE: float
+    TOP_P: float
+    TOP_K: float
     GOOGLE_APPLICATION_CREDENTIALS: str
-
-    MODEL_NAME: str = Field(default="gemini-2.0-flash-lite")
-    MAX_OUTPUT_TOKENS: str = Field(default="8192")
-    TEMPERATURE: str = Field(default="0")
-    TOP_P: str = Field(default="0.95")
-    TOP_K: str = Field(default="1")
-    MAX_SEARCH_LEN: str = Field(default="400")
-
-    NLP_SEARCH_INSTRUCTION_PROMPT: str
-    NPL_SEARCH_EXAMPLE_PROMPT: str
+    MAX_SEARCH_LEN: int
+    class Config:
+        env_file = ".env"

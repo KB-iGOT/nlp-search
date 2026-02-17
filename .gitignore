@@ -1,65 +1,54 @@
-# Project
-creds/
-tests/
-prj*.json
+# Environment variables
 .env
 
 # Python
 __pycache__/
 *.py[cod]
+*$py.class
 *.pyo
 *.pyd
-*.db
-*.sqlite3
-
-# Virtual Environment
-.venv/
+.Python
 env/
 venv/
-ENV/
-env.bak/
-venv.bak/
-
-# IDEs and Editors
-.vscode/
-.idea/
-*.sublime-project
-*.sublime-workspace
-
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# Pytest
-.cache/
-*.cover
-*.log
-nosetests.xml
-coverage.xml
-*.cover
-*.py,cover
-
-# Distribution / packaging
-.Python
-build/
+.venv/
+bin/
+lib/
 develop-eggs/
 dist/
-downloads/
 eggs/
+lib64/
 parts/
 sdist/
 var/
-wheels/
-share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
 
-# Environment variables
-.env
-*.env
+# uv
+.uv/
 
-# Miscellaneous
-*.DS_Store
-*.log
-*.tmp
-*.bak
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nosepy
+.pytest_cache/
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+
+# Google Cloud
+creds/
+*.json
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Misc
+.DS_Store
+Thumbs.db
