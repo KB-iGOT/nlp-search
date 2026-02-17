@@ -58,10 +58,14 @@ def search_request(req_data: SearchModel):
 
 def llm_request(req_data: SearchModel):
     
-    prompt = settings.NLP_SEARCH_INSTRUCTION_PROMPT + req_data.query + settings.NPL_SEARCH_EXAMPLE_PROMPT
-    
+    instruction = settings.NLP_SEARCH_INSTRUCTION_PROMPT
+    example = settings.NPL_SEARCH_EXAMPLE_PROMPT
+
     if req_data.synonyms:
-        prompt = prompt.replace(']' , '] \n Add synonym for keywords wherever possible.')
+        instruction = instruction.replace(']' , '] \n Add synonym for keywords wherever possible.')
+        example = example.replace(']' , '] \n Add synonym for keywords wherever possible.')
+
+    prompt = instruction + req_data.query + example
     
     logger.info(f"Final prompt :: {prompt}")
 
