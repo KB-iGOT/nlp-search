@@ -17,6 +17,7 @@ omit = [
     "src/config.py",
     "src/__init__.py",
     "src/search/__init__.py",
+    "tests/*"
 ]
 
 [tool.coverage.report]
