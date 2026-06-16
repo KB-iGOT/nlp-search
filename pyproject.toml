@@ -1,0 +1,24 @@
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+# Add project root to sys.path so `from src.x import y` works in tests
+pythonpath = ["."]
+
+[tool.coverage.run]
+source = ["src"]
+omit = [
+    # Excluded from coverage — wiring/config only, no business logic.
+    # NOTE: NOT in sonar.exclusions so FastAPI SonarQube rules (S8392, S8397,
+    # S8400, S8401, S8413, S8414) can still fire on these files.
+    "src/main.py",
+    "src/config.py",
+    "src/__init__.py",
+    "src/search/__init__.py",
+]
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 80
