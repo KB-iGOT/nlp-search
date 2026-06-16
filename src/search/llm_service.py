@@ -1,5 +1,4 @@
 import os, json
-import traceback
 import logging
 from fastapi.exceptions import HTTPException 
 import vertexai
@@ -50,9 +49,8 @@ def search_request(req_data: SearchModel):
         
         logger.info(f"Response :: {response}")
         return {"data" : response}
-    except Exception as e:
-        logger.error(f"An unexpected error occurred: {e}")
-        traceback.print_exc()
+    except Exception:
+        logger.exception("An unexpected error occurred")
         raise HTTPException(status_code=500, detail="Internal server error during request processing.")
     
 
@@ -71,7 +69,6 @@ def llm_request(req_data: SearchModel):
 
     responses = model.generate_content(
         prompt,
-        #safety_settings=safety_settings,
         stream=True
     )
     res_text_designation = ""
@@ -82,12 +79,10 @@ def llm_request(req_data: SearchModel):
     
     try:
         return json.loads(res_text_designation.replace('```','').replace('json', ''))
-    except json.JSONDecodeError as e:
-        logger.error(f"Failed to decode LLM response: {res_text_designation}")
-        logger.error(f"JSONDecodeError: {e}")
+    except json.JSONDecodeError:
+        logger.exception("Failed to decode LLM response: %s", res_text_designation)
         return HTTPException(status_code=500, detail="Failed to process the query. Please try again later!")
-    except Exception as e:
-        logger.error(f"An unexpected error occurred during LLM processing: {e}")
-        logger.error(res_text_designation)
-        traceback.print_exc()
+    except Exception:
+        logger.exception("An unexpected error occurred during LLM processing")
+        logger.error("Raw LLM response: %s", res_text_designation)
         return HTTPException(status_code=500, detail="Failed to process the query. Please try again later!")

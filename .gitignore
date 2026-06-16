@@ -1,6 +1,6 @@
 # Project
 creds/
-tests/
+# tests/
 prj*.json
 .env
 
@@ -37,6 +37,7 @@ nosetests.xml
 coverage.xml
 *.cover
 *.py,cover
+.coverage
 
 # Distribution / packaging
 .Python
@@ -63,3 +64,6 @@ share/python-wheels/
 *.log
 *.tmp
 *.bak
+.sonar/
+.sonarlint/
+*.md
