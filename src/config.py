@@ -1,4 +1,5 @@
 import os
+from functools import lru_cache
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
 
@@ -24,3 +25,25 @@ class Settings(BaseSettings):
 
     NLP_SEARCH_INSTRUCTION_PROMPT: str
     NPL_SEARCH_EXAMPLE_PROMPT: str
+
+    # Response cache. These are required: the service refuses to start rather
+    # than fall back to a Redis that was never configured.
+    REDIS_ENABLED: bool
+    REDIS_HOST: str
+    REDIS_PORT: int
+    REDIS_DB: int
+    REDIS_PASSWORD: str
+    REDIS_SSL: bool
+    REDIS_KEY_PREFIX: str
+    REDIS_CACHE_TTL_DAYS: int
+    # Counts how often each query is asked, in the same record as its answer.
+    REDIS_QUERY_COUNTER_ENABLED: bool
+
+    @property
+    def redis_cache_ttl_seconds(self) -> int:
+        return self.REDIS_CACHE_TTL_DAYS * 24 * 60 * 60
+
+
+@lru_cache
+def get_settings():
+    return Settings()

@@ -1,19 +1,15 @@
 import os, json
 import traceback
 import logging
-from fastapi.exceptions import HTTPException 
+from fastapi.exceptions import HTTPException
 import vertexai
 from vertexai.generative_models import GenerativeModel
-from functools import lru_cache
-from src import config
+from src.config import get_settings
+from src.services.redis_service import redis_service
 from src.search.request_model import SearchModel
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-@lru_cache
-def get_settings():
-    return config.Settings()
 
 settings = get_settings()
 if "GOOGLE_APPLICATION_CREDENTIALS" not in os.environ:
@@ -37,24 +33,37 @@ model = GenerativeModel(
 def search_request(req_data: SearchModel):
     try:
         logger.info(f"Received nlp serch request :: {req_data.model_dump()}")
-        
+
         if not req_data.query.strip():
             return HTTPException(status_code=400, detail="Query cannot be empty.")
-        
+
         if len(req_data.query) > int(settings.MAX_SEARCH_LEN):
             return HTTPException(status_code=400, detail=f"Query cannot be longer than {int(settings.MAX_SEARCH_LEN)} characters")
-            
+
+        cache_key = redis_service.build_key(req_data.query, req_data.synonyms, settings)
+
+        # One round trip counts the request and reads back any cached answer.
+        cached, count = redis_service.lookup(cache_key, req_data.query, settings)
+
+        if cached is not None:
+            logger.info(f"Cache HIT :: {cache_key} count={count}")
+            return {"data" : cached}
+
+        logger.info(f"Cache MISS :: {cache_key} count={count}")
+
         response = llm_request(req_data)
         if isinstance(response, Exception):
             return response
-        
+
+        redis_service.store(cache_key, response, req_data.query, settings)
+
         logger.info(f"Response :: {response}")
         return {"data" : response}
     except Exception as e:
         logger.error(f"An unexpected error occurred: {e}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail="Internal server error during request processing.")
-    
+
 
 def llm_request(req_data: SearchModel):
     

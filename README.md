@@ -66,6 +66,76 @@ pip install uv && uv pip install -r requirements.txt
 2. **Google Service Credentials**  
    Place your Google Cloud service account credentials JSON file in the `creds/` directory.
 
+3. **Redis response cache (optional)**
+
+   Responses are deterministic (`TEMPERATURE=0`), so identical queries are served from Redis
+   instead of calling the LLM again. The cache is **on by default**; set `REDIS_ENABLED=false`
+   to turn it off.
+
+   | Variable | Default | Description |
+   |----------|---------|-------------|
+   | `REDIS_ENABLED` | `true` | Master switch. When false the service never touches Redis. |
+   | `REDIS_HOST` / `REDIS_PORT` / `REDIS_DB` | `localhost` / `6379` / `0` | Connection target. |
+   | `REDIS_PASSWORD` / `REDIS_SSL` | empty / `false` | Leave unset for an unauthenticated in-cluster Redis. |
+   | `REDIS_CACHE_TTL_DAYS` | `30` | How long a cached response lives. |
+   | `REDIS_QUERY_COUNTER_ENABLED` | `true` | Count how often each query is asked. |
+   | `REDIS_KEY_PREFIX` | `nlpsearch` | Prefix for every key written by this service. |
+
+   > **Cached responses do not expire when the prompts or `MODEL_NAME` change.** Only the query
+   > text and the `synonyms` flag form the cache key, so after editing either one, clear the
+   > cache manually or previous answers keep being served for up to `REDIS_CACHE_TTL_DAYS`:
+   >
+   > ```bash
+   > redis-cli --scan --pattern "nlpsearch:*" | xargs -r redis-cli del
+   > ```
+
+   The cache is best-effort: if Redis is unreachable the request falls through to the LLM and
+   still succeeds. After a few consecutive failures the service stops calling Redis for a
+   cooldown so an outage does not add connection timeouts to every request, then retries
+   automatically.
+
+   **Running Redis locally with Docker:**
+
+   ```bash
+   docker run -d --name nlp-redis -p 127.0.0.1:6379:6379 --restart unless-stopped \
+     redis:6.2-alpine redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+   ```
+
+   Useful while developing:
+
+   ```bash
+   docker exec nlp-redis redis-cli --scan --pattern "nlpsearch:*"   # what is cached
+   docker exec nlp-redis redis-cli flushdb                          # clear the cache
+   ```
+
+   Caching is invisible to callers: the API is unchanged, with no added endpoints, request
+   fields or response headers. Cache hits, misses and Redis problems appear in the service
+   logs, and the stored records can be read directly from Redis.
+
+4. **What a record looks like**
+
+   One Redis hash per query holds both the cached answer and how often it has been asked:
+
+   ```bash
+   $ redis-cli hgetall "nlpsearch:v1:nosyn:92b9035c..."
+   count           3
+   query           give me python courses
+   data            {"keywords": [{"keyword": "python courses", "priority": 1}]}
+   ```
+
+   Queries are lowercased, trimmed and their internal whitespace collapsed before anything is
+   keyed or stored, so `"  GIVE me   Python Courses "` and `"give me python courses"` are one
+   record, and Redis holds only the cleaned form.
+
+   `count` is incremented by Redis itself, so it stays correct with several workers or pods
+   running, and it rises on cache hits too, not just on calls to the model. The whole record
+   expires `REDIS_CACHE_TTL_DAYS` after the query was first asked, counter included, and can
+   also be evicted early under `maxmemory-policy allkeys-lru`. Counts are a usage signal, not
+   an audit record.
+
+   Because `synonyms` is part of the key, the same question asked with and without synonyms is
+   two records with separate counts.
+
 ---
 
 ## Running the Service
