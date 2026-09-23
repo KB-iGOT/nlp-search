@@ -66,7 +66,28 @@ pip install uv && uv pip install -r requirements.txt
 2. **Google Service Credentials**  
    Place your Google Cloud service account credentials JSON file in the `creds/` directory.
 
-3. **Redis response cache (optional)**
+3. **LLM retries**
+
+   Transient Vertex AI failures (timeouts, 5xx, rate limits) are retried with an exponentially
+   growing wait, as is a response that arrives but is not readable JSON. Errors the call cannot
+   recover from — bad credentials, an invalid request, a response stopped by the safety filters —
+   fail immediately. Once the retries are used up, Vertex AI's own error is passed back
+   unchanged, so a quota failure still reads as `429` and an unavailable backend as `503`;
+   an unreadable response gives the same `500` it always has.
+
+   > Each retry is a fresh billed call against your regional quota. Because `TEMPERATURE=0`
+   > makes the same prompt return the same text, retrying an unreadable response often spends
+   > four calls to get the same answer — watch the `Failed to decode LLM response` log line.
+
+   | Variable | Default | Description |
+   |----------|---------|-------------|
+   | `LLM_MAX_RETRIES` | `3` | Retries after the first call, so `3` means up to 4 calls. `0` disables retrying. |
+
+   The wait starts at 1 second and doubles each time: 1s, 2s, 4s, and so on. With the default of
+   3 retries a fully failing request waits `1 + 2 + 4 = 7` seconds before giving up, so raise
+   `LLM_MAX_RETRIES` with an eye on the caller's own timeout.
+
+4. **Redis response cache (optional)**
 
    Responses are deterministic (`TEMPERATURE=0`), so identical queries are served from Redis
    instead of calling the LLM again. The cache is **on by default**; set `REDIS_ENABLED=false`
@@ -112,7 +133,7 @@ pip install uv && uv pip install -r requirements.txt
    fields or response headers. Cache hits, misses and Redis problems appear in the service
    logs, and the stored records can be read directly from Redis.
 
-4. **What a record looks like**
+5. **What a record looks like**
 
    One Redis hash per query holds both the cached answer and how often it has been asked:
 

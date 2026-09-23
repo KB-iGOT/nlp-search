@@ -23,6 +23,11 @@ class Settings(BaseSettings):
     TOP_K: str = Field(default="1")
     MAX_SEARCH_LEN: str = Field(default="400")
 
+    # Retries for transient Vertex AI failures. This counts retries only, so the
+    # model is called at most LLM_MAX_RETRIES + 1 times. Set it to 0 to call the
+    # model once and never retry. Waits double each time: 1s, 2s, 4s, ...
+    LLM_MAX_RETRIES: int = Field(default=3)
+
     NLP_SEARCH_INSTRUCTION_PROMPT: str
     NPL_SEARCH_EXAMPLE_PROMPT: str
 
