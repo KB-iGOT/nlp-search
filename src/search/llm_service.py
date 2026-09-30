@@ -75,12 +75,6 @@ def build_generation_config(synonyms: bool) -> GenerationConfig:
     )
 
 
-# Built once here and picked per request, keyed by whether synonyms were asked for.
-GENERATION_CONFIGS = {
-    False: build_generation_config(synonyms=False),
-    True: build_generation_config(synonyms=True),
-}
-
 vertexai.init(project=settings.GOOGLE_CLOUD_PROJECT, location=settings.GOOGLE_CLOUD_LOCATION)
 model = GenerativeModel(
         settings.MODEL_NAME,
@@ -129,7 +123,7 @@ def generate_content(prompt: str, synonyms: bool):
     """
     responses = model.generate_content(
         prompt,
-        generation_config=GENERATION_CONFIGS[bool(synonyms)],
+        generation_config=build_generation_config(synonyms),
         #safety_settings=safety_settings,
         stream=True
     )
