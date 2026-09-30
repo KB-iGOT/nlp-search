@@ -3,7 +3,7 @@ import traceback
 import logging
 from fastapi.exceptions import HTTPException
 import vertexai
-from vertexai.generative_models import GenerativeModel
+from vertexai.generative_models import GenerationConfig, GenerativeModel
 from google.api_core import exceptions as google_exceptions
 from google.auth import exceptions as google_auth_exceptions
 from tenacity import (
@@ -24,19 +24,70 @@ settings = get_settings()
 if "GOOGLE_APPLICATION_CREDENTIALS" not in os.environ:
     os.environ["GOOGLE_APPLICATION_CREDENTIALS"]=settings.GOOGLE_APPLICATION_CREDENTIALS
 
+def build_keywords_schema(synonyms: bool) -> dict:
+    """Shape of every answer. Vertex AI decodes against it, so the model can only
+    reply with this JSON: no code fences, no escaped quotes, no echoed "Query: ..."
+    lines.
+
+    The two variants differ only in synonyms. A field the schema leaves optional is
+    one the model is free to skip, so when synonyms are asked for they are required,
+    with at least one per keyword; when they are not, the field is left out and the
+    model has no way to produce it.
+    """
+    properties = {
+        "keyword": {"type": "STRING"},
+        "priority": {"type": "INTEGER", "minimum": 1},
+    }
+    if synonyms:
+        properties["synonyms"] = {
+            "type": "ARRAY",
+            "items": {"type": "STRING"},
+            "minItems": 1
+        }
+
+    return {
+        "type": "OBJECT",
+        "properties": {
+            "keywords": {
+                "type": "ARRAY",
+                "items": {
+                    "type": "OBJECT",
+                    "properties": properties,
+                    "required": list(properties),
+                    # Gemini writes properties alphabetically unless told otherwise; the
+                    # keyword goes first so priority and synonyms are chosen with it in view.
+                    "propertyOrdering": list(properties)
+                }
+            }
+        },
+        "required": ["keywords"]
+    }
+
+
+def build_generation_config(synonyms: bool) -> GenerationConfig:
+    return GenerationConfig(
+        max_output_tokens=int(settings.MAX_OUTPUT_TOKENS),
+        temperature=float(settings.TEMPERATURE),
+        top_p=float(settings.TOP_P),
+        top_k=int(settings.TOP_K),
+        response_mime_type="application/json",
+        response_schema=build_keywords_schema(synonyms)
+    )
+
+
+# Built once here and picked per request, keyed by whether synonyms were asked for.
+GENERATION_CONFIGS = {
+    False: build_generation_config(synonyms=False),
+    True: build_generation_config(synonyms=True),
+}
+
 vertexai.init(project=settings.GOOGLE_CLOUD_PROJECT, location=settings.GOOGLE_CLOUD_LOCATION)
 model = GenerativeModel(
         settings.MODEL_NAME,
         system_instruction=[
             "You are a helpful language expert.",
             "Your mission is to extract search keywords from queries."
-        ],
-        generation_config= {
-            "max_output_tokens": int(settings.MAX_OUTPUT_TOKENS),
-            "temperature": float(settings.TEMPERATURE),
-            "top_p": float(settings.TOP_P),
-            "top_k": int(settings.TOP_K)
-        }
+        ]
 )
 
 # Failures worth calling the model again for: the request never got a verdict of
@@ -68,7 +119,7 @@ RETRYABLE_RESPONSE_ERRORS = (json.JSONDecodeError,)
     # Surface the original Vertex AI error rather than tenacity's RetryError.
     reraise=True,
 )
-def generate_content(prompt: str):
+def generate_content(prompt: str, synonyms: bool):
     """Call the model, collect the streamed answer and parse it into JSON.
 
     The stream is drained inside the retried call on purpose: with streaming the
@@ -78,6 +129,7 @@ def generate_content(prompt: str):
     """
     responses = model.generate_content(
         prompt,
+        generation_config=GENERATION_CONFIGS[bool(synonyms)],
         #safety_settings=safety_settings,
         stream=True
     )
@@ -87,7 +139,9 @@ def generate_content(prompt: str):
 
     logger.info(f"Model Response :: {res_text_designation}")
 
-    return json.loads(res_text_designation.replace('```','').replace('json', ''))
+    # JSON mode returns bare JSON. It can still fail to parse if the answer was cut
+    # off at max_output_tokens, which is why this stays a retryable error.
+    return json.loads(res_text_designation)
 
 
 def search_request(req_data: SearchModel):
@@ -139,7 +193,7 @@ def llm_request(req_data: SearchModel):
     logger.info(f"Final prompt :: {prompt}")
 
     try:
-        return generate_content(prompt)
+        return generate_content(prompt, req_data.synonyms)
     except RETRYABLE_LLM_ERRORS as e:
         logger.error(f"Vertex AI still failing after {settings.LLM_MAX_RETRIES} retries: {e}")
         # Hand back whatever Vertex AI answered with. Errors that never reached
