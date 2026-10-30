@@ -2,9 +2,9 @@ import hashlib
 import json
 import logging
 
-import redis
+import redis.asyncio as redis
 from redis.backoff import NoBackoff
-from redis.retry import Retry
+from redis.asyncio.retry import Retry
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -42,7 +42,7 @@ class RedisService:
     # Connection lifecycle                                                #
     # ------------------------------------------------------------------ #
 
-    def init_cache(self, settings) -> None:
+    async def init_cache(self, settings) -> None:
         """Build the connection pool once, at application startup.
 
         A failed ping here is logged but not fatal: the client is kept so that
@@ -69,15 +69,15 @@ class RedisService:
                 retry=Retry(NoBackoff(), 0),
             )
             self._client = redis.Redis(connection_pool=pool)
-            self._client.ping()
+            await self._client.ping()
             logger.info(f"Redis cache connected :: {settings.REDIS_HOST}:{settings.REDIS_PORT} db={settings.REDIS_DB}")
         except Exception as e:
             logger.warning(f"Redis unreachable at startup, running without cache until it recovers :: {e}")
 
-    def close_cache(self) -> None:
+    async def close_cache(self) -> None:
         if self._client is not None:
             try:
-                self._client.close()
+                await self._client.aclose(close_connection_pool=True)
             except Exception as e:
                 logger.warning(f"Failed to close Redis connection :: {e}")
             self._client = None
@@ -90,19 +90,19 @@ class RedisService:
     # Redis primitives                                                    #
     # ------------------------------------------------------------------ #
 
-    def _hset(self, key: str, mapping: dict) -> bool:
+    async def _hset(self, key: str, mapping: dict) -> bool:
         """Write fields into a hash. False if Redis could not be reached."""
         try:
-            self._client.hset(key, mapping=mapping)
+            await self._client.hset(key, mapping=mapping)
             logger.debug(f"Redis HSET {key} ({len(mapping)} fields)")
             return True
         except Exception as e:
             logger.warning(f"Redis write failed, response served but not cached :: {e}")
             return False
 
-    def _expire(self, key: str, settings) -> None:
+    async def _expire(self, key: str, settings) -> None:
         try:
-            self._client.expire(key, settings.redis_cache_ttl_seconds)
+            await self._client.expire(key, settings.redis_cache_ttl_seconds)
             logger.debug(f"Redis EXPIRE {key} ttl={settings.REDIS_CACHE_TTL_DAYS}d")
         except Exception as e:
             logger.warning(f"Could not set expiry on {key} :: {e}")
@@ -126,7 +126,7 @@ class RedisService:
             hashlib.sha256(normalise(query).encode("utf-8")).hexdigest(),
         ])
 
-    def lookup(self, key: str, query: str, settings):
+    async def lookup(self, key: str, query: str, settings):
         """Count this request and read back any cached answer, in one round trip.
 
         Returns (data, count), either of which may be None: data when nothing is
@@ -146,7 +146,7 @@ class RedisService:
                 pipe.hincrby(key, "count", 1)
                 pipe.hsetnx(key, "query", normalise(query))
             pipe.hget(key, "data")
-            results = pipe.execute()
+            results = await pipe.execute()
         except Exception as e:
             logger.warning(f"Redis read failed, falling back to the LLM :: {e}")
             return None, None
@@ -158,7 +158,7 @@ class RedisService:
         # lifespan now. Counting alone can create a record whose answer never
         # arrives (an unparseable model response), and that must expire too.
         if count == 1:
-            self._expire(key, settings)
+            await self._expire(key, settings)
 
         if raw is None:
             return None, count
@@ -169,7 +169,7 @@ class RedisService:
             logger.warning(f"Discarding unreadable cache entry {key} :: {e}")
             return None, count
 
-    def store(self, key: str, data, query: str, settings) -> None:
+    async def store(self, key: str, data, query: str, settings) -> None:
         """Add a fresh answer to a record. Failures are logged and otherwise ignored."""
         if not self._available:
             return
@@ -179,12 +179,12 @@ class RedisService:
             "data": json.dumps(data),
         }
 
-        if not self._hset(key, fields):
+        if not await self._hset(key, fields):
             return
 
         # With counting switched off nothing else sets the lifespan, and a record
         # rewritten after expiry needs a new one.
-        self._expire(key, settings)
+        await self._expire(key, settings)
         logger.info(f"Cached response :: {key} ttl={settings.REDIS_CACHE_TTL_DAYS}d")
 
 

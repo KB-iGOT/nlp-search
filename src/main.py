@@ -7,9 +7,9 @@ from .search.router import router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    redis_service.init_cache(get_settings())
+    await redis_service.init_cache(get_settings())
     yield
-    redis_service.close_cache()
+    await redis_service.close_cache()
 
 
 app = FastAPI(lifespan=lifespan)

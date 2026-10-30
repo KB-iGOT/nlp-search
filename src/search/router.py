@@ -6,5 +6,5 @@ from src.search.llm_service import search_request
 router = APIRouter()
 
 @router.post("/search")
-def search(search_model : SearchModel):
-    return search_request(search_model)
+async def search(search_model : SearchModel):
+    return await search_request(search_model)

@@ -66,26 +66,42 @@ pip install uv && uv pip install -r requirements.txt
 2. **Google Service Credentials**  
    Place your Google Cloud service account credentials JSON file in the `creds/` directory.
 
-3. **LLM retries**
+3. **LLM timeouts and retries**
 
-   Transient Vertex AI failures (timeouts, 5xx, rate limits) are retried with an exponentially
-   growing wait, as is a response that arrives but is not readable JSON. Errors the call cannot
-   recover from — bad credentials, an invalid request, a response stopped by the safety filters —
-   fail immediately. Once the retries are used up, Vertex AI's own error is passed back
-   unchanged, so a quota failure still reads as `429` and an unavailable backend as `503`;
-   an unreadable response gives the same `500` it always has.
+   The model is called on Vertex AI through the `google-genai` SDK. The SDK's own retries are
+   left off, so it makes one attempt per call; all retrying is done by the service itself, with
+   `tenacity`.
+
+   Each attempt is limited to `LLM_ATTEMPT_TIMEOUT_SECONDS`. An attempt still running at the limit
+   is cancelled and retried like any other timeout. Rate limits (`429`), server errors (`500`,
+   `502`, `503`, `504`), timeouts and dropped connections are retried, as is a response that
+   arrives but is not readable JSON. Errors the call cannot recover from (bad credentials, an
+   invalid request, a response stopped by the safety filters) fail immediately.
+
+   Once the retries are used up, the request fails with:
+
+   | Final failure | Status |
+   |---------------|--------|
+   | Vertex AI returned `429`, `503` or `504` | the same status |
+   | Vertex AI returned any other error | `502` |
+   | The attempt timed out | `504` |
+   | Vertex AI could not be reached | `503` |
+   | The response was empty (e.g. blocked) or not readable JSON | `502` |
 
    > Each retry is a fresh billed call against your regional quota. Because `TEMPERATURE=0`
    > makes the same prompt return the same text, retrying an unreadable response often spends
-   > four calls to get the same answer — watch the `Failed to decode LLM response` log line.
+   > every attempt to get the same answer. Watch for the `Unusable LLM response` log line.
 
    | Variable | Default | Description |
    |----------|---------|-------------|
-   | `LLM_MAX_RETRIES` | `3` | Retries after the first call, so `3` means up to 4 calls. `0` disables retrying. |
+   | `LLM_MAX_RETRIES` | `2` | Retries after the first call, so `2` means up to 3 calls. `0` disables retrying. |
+   | `LLM_ATTEMPT_TIMEOUT_SECONDS` | `4` | Seconds allowed for one call to the model. Each retry gets the same again. |
 
-   The wait starts at 1 second and doubles each time: 1s, 2s, 4s, and so on. With the default of
-   3 retries a fully failing request waits `1 + 2 + 4 = 7` seconds before giving up, so raise
-   `LLM_MAX_RETRIES` with an eye on the caller's own timeout.
+   The wait between attempts starts at 1 second and doubles each time, up to 4 seconds, with up
+   to 1 second of random jitter added so that callers rate limited together do not retry
+   together. With the defaults, a fully failing request takes at most about
+   `3 × 4s + (1 + 2)s + up to 2s of jitter ≈ 17` seconds before giving up, so set both
+   variables with an eye on the caller's own timeout.
 
 4. **Redis response cache (optional)**
 
