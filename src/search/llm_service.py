@@ -173,7 +173,84 @@ async def generate_with_retries(prompt: str, synonyms: bool):
                 return await generate_content(prompt, synonyms)
 
 
+TIMED_OUT_MESSAGE = "This is taking longer than expected. Please try again."
+FAILED_MESSAGE = "Failed to process the query. Please try again later!"
+
+# Answers being fetched right now in this worker, by cache key. A request for a
+# query already in here waits on the same task rather than calling the model
+# again. The dict also keeps each task alive: asyncio holds only weak references
+# to tasks, so one nothing else refers to can be garbage collected mid-call.
+_inflight: dict[str, asyncio.Task] = {}
+
+# How long shutdown waits for answers still being fetched, so that they are
+# cached rather than lost. Keep it inside the pod's termination grace period.
+SHUTDOWN_GRACE_SECONDS = 20
+
+
+async def _fetch_and_cache(cache_key: str, req_data: SearchModel):
+    """Get an answer from the model and cache it.
+
+    Runs as a task of its own, so it finishes even after the request that started
+    it has given up waiting. Returns the answer, or the HTTPException saying why
+    there is none; never raises, other than being cancelled at shutdown.
+    """
+    try:
+        response = await llm_request(req_data)
+        if isinstance(response, Exception):
+            return response
+
+        await redis_service.store(cache_key, response, req_data.query, settings)
+        logger.info(f"Response :: {response}")
+        return response
+    except Exception as e:
+        logger.error(f"An unexpected error occurred while fetching {cache_key}: {e}")
+        traceback.print_exc()
+        return HTTPException(status_code=500, detail=FAILED_MESSAGE)
+
+
+def _get_or_start(cache_key: str, req_data: SearchModel) -> tuple[asyncio.Task, bool]:
+    """The task fetching this query's answer, and whether this call started it.
+
+    Joins the task already running for the query if there is one, otherwise starts
+    one. There is no await between the lookup and the insert, so two requests on
+    the event loop can never both find the query missing and both start a call.
+    """
+    task = _inflight.get(cache_key)
+    if task is not None:
+        return task, False
+
+    task = asyncio.create_task(_fetch_and_cache(cache_key, req_data))
+    _inflight[cache_key] = task
+
+    def forget(done: asyncio.Task) -> None:
+        # Once it has ended, the next request reads the cache or starts afresh.
+        if _inflight.get(cache_key) is done:
+            del _inflight[cache_key]
+
+    task.add_done_callback(forget)
+    return task, True
+
+
+async def drain_background_tasks() -> None:
+    """At shutdown, give answers still being fetched time to finish and be cached,
+    then cancel the rest. Call it before Redis is closed."""
+    tasks = list(_inflight.values())
+    if not tasks:
+        return
+
+    logger.info(f"Waiting up to {SHUTDOWN_GRACE_SECONDS}s for {len(tasks)} answers still being fetched")
+    _, pending = await asyncio.wait(tasks, timeout=SHUTDOWN_GRACE_SECONDS)
+    if pending:
+        logger.warning(f"Cancelling {len(pending)} answers still being fetched at shutdown")
+        for task in pending:
+            task.cancel()
+        await asyncio.gather(*pending, return_exceptions=True)
+
+
 async def search_request(req_data: SearchModel):
+    loop = asyncio.get_running_loop()
+    # The whole request, cache lookup included, answers within this.
+    deadline = loop.time() + settings.RESPONSE_TIMEOUT_SECONDS
     try:
         logger.info(f"Received nlp serch request :: {req_data.model_dump()}")
 
@@ -194,13 +271,24 @@ async def search_request(req_data: SearchModel):
 
         logger.info(f"Cache MISS :: {cache_key} count={count}")
 
-        response = await llm_request(req_data)
+        task, started = _get_or_start(cache_key, req_data)
+        if not started:
+            logger.info(f"Joining the model call already running :: {cache_key}")
+
+        # asyncio.wait, unlike wait_for, leaves the task running when time is up.
+        done, _ = await asyncio.wait({task}, timeout=max(0, deadline - loop.time()))
+
+        if task not in done:
+            logger.warning(f"No answer within {settings.RESPONSE_TIMEOUT_SECONDS}s, still fetching in the background :: {cache_key}")
+            return HTTPException(status_code=504, detail=TIMED_OUT_MESSAGE)
+
+        if task.cancelled():
+            return HTTPException(status_code=503, detail=FAILED_MESSAGE)
+
+        response = task.result()
         if isinstance(response, Exception):
             return response
 
-        await redis_service.store(cache_key, response, req_data.query, settings)
-
-        logger.info(f"Response :: {response}")
         return {"data" : response}
     except Exception as e:
         logger.error(f"An unexpected error occurred: {e}")
