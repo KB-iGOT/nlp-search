@@ -35,9 +35,9 @@ class Settings(BaseSettings):
     LLM_ATTEMPT_TIMEOUT_SECONDS: float = Field(default=10)
 
     # How long a request waits for an answer that is not cached. Past this the
-    # client gets a 504 asking it to try again, while the model call carries on
+    # client gets a 202 asking it to try again, while the model call carries on
     # in the background and caches its answer for that next try.
-    RESPONSE_TIMEOUT_SECONDS: float = Field(default=4)
+    RESPONSE_TIMEOUT_SECONDS: float = Field(default=3)
 
     NLP_SEARCH_INSTRUCTION_PROMPT: str
     NPL_SEARCH_EXAMPLE_PROMPT: str

@@ -255,10 +255,10 @@ async def search_request(req_data: SearchModel):
         logger.info(f"Received nlp serch request :: {req_data.model_dump()}")
 
         if not req_data.query.strip():
-            return HTTPException(status_code=400, detail="Query cannot be empty.")
+            raise HTTPException(status_code=400, detail="Query cannot be empty.")
 
         if len(req_data.query) > int(settings.MAX_SEARCH_LEN):
-            return HTTPException(status_code=400, detail=f"Query cannot be longer than {int(settings.MAX_SEARCH_LEN)} characters")
+            raise HTTPException(status_code=400, detail=f"Query cannot be longer than {int(settings.MAX_SEARCH_LEN)} characters")
 
         cache_key = redis_service.build_key(req_data.query, req_data.synonyms, settings)
 
@@ -280,16 +280,23 @@ async def search_request(req_data: SearchModel):
 
         if task not in done:
             logger.warning(f"No answer within {settings.RESPONSE_TIMEOUT_SECONDS}s, still fetching in the background :: {cache_key}")
-            return HTTPException(status_code=504, detail=TIMED_OUT_MESSAGE)
+            # 202, not an error: the request was accepted and its answer is on
+            # the way, so the client's next try will find it.
+            raise HTTPException(status_code=202, detail=TIMED_OUT_MESSAGE)
 
         if task.cancelled():
-            return HTTPException(status_code=503, detail=FAILED_MESSAGE)
+            raise HTTPException(status_code=503, detail=FAILED_MESSAGE)
 
+        # The task hands back a model failure as an HTTPException rather than
+        # raising it, since several requests may be waiting on the same task.
         response = task.result()
         if isinstance(response, Exception):
-            return response
+            raise response
 
         return {"data" : response}
+    except HTTPException:
+        # Already carries the status the client should get; not an unexpected error.
+        raise
     except Exception as e:
         logger.error(f"An unexpected error occurred: {e}")
         traceback.print_exc()
