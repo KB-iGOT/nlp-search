@@ -3,13 +3,16 @@ from fastapi import FastAPI
 from .services.redis_service import redis_service
 from .config import get_settings
 from .search.router import router
+from .search.llm_service import drain_background_tasks
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    redis_service.init_cache(get_settings())
+    await redis_service.init_cache(get_settings())
     yield
-    redis_service.close_cache()
+    # First, so that answers still being fetched can be cached.
+    await drain_background_tasks()
+    await redis_service.close_cache()
 
 
 app = FastAPI(lifespan=lifespan)

@@ -25,8 +25,19 @@ class Settings(BaseSettings):
 
     # Retries for transient Vertex AI failures. This counts retries only, so the
     # model is called at most LLM_MAX_RETRIES + 1 times. Set it to 0 to call the
-    # model once and never retry. Waits double each time: 1s, 2s, 4s, ...
-    LLM_MAX_RETRIES: int = Field(default=3)
+    # model once and never retry. Waits double each time: 1s, 2s, then 4s at most,
+    # each with up to 1s of jitter added.
+    LLM_MAX_RETRIES: int = Field(default=2)
+    # Time allowed for one call to the model. With retries, the LLM step takes at
+    # most (LLM_MAX_RETRIES + 1) times this, plus the waits between attempts.
+    # Nobody waits on it past RESPONSE_TIMEOUT_SECONDS, so it only has to stop a
+    # call that hangs; keep it well above how long a slow answer takes.
+    LLM_ATTEMPT_TIMEOUT_SECONDS: float = Field(default=10)
+
+    # How long a request waits for an answer that is not cached. Past this the
+    # client gets a 202 asking it to try again, while the model call carries on
+    # in the background and caches its answer for that next try.
+    RESPONSE_TIMEOUT_SECONDS: float = Field(default=3)
 
     NLP_SEARCH_INSTRUCTION_PROMPT: str
     NPL_SEARCH_EXAMPLE_PROMPT: str

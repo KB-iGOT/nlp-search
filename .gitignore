@@ -1,6 +1,5 @@
 # Project
 creds/
-tests/
 prj*.json
 .env
 
