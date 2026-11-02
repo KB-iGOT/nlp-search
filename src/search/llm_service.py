@@ -319,8 +319,9 @@ async def llm_request(req_data: SearchModel):
     example = settings.NPL_SEARCH_EXAMPLE_PROMPT
 
     if req_data.synonyms:
-        instruction = instruction.replace(']' , '] \n Add synonym for keywords wherever possible.')
-        example = example.replace(']' , '] \n Add synonym for keywords wherever possible.')
+        # Only the first ']', the one closing the query: the examples' answers hold
+        # more, and the line must not land inside them.
+        example = example.replace(']' , '] \n Add synonym for keywords wherever possible.', 1)
 
     prompt = instruction + req_data.query + example
 
