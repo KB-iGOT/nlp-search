@@ -169,8 +169,15 @@ async def generate_with_retries(prompt: str, synonyms: bool):
         reraise=True,
     ):
         with attempt:
-            async with asyncio.timeout(settings.LLM_ATTEMPT_TIMEOUT_SECONDS):
-                return await generate_content(prompt, synonyms)
+            try:
+                return await asyncio.wait_for(
+                    generate_content(prompt, synonyms),
+                    timeout=settings.LLM_ATTEMPT_TIMEOUT_SECONDS,
+                )
+            except asyncio.TimeoutError as e:
+                # Before Python 3.11 asyncio raises its own TimeoutError, which the
+                # retry check and the 504 handling would not recognise.
+                raise TimeoutError(f"Attempt timed out after {settings.LLM_ATTEMPT_TIMEOUT_SECONDS}s") from e
 
 
 TIMED_OUT_MESSAGE = "This is taking longer than expected. Please try again."
