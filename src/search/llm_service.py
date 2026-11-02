@@ -344,11 +344,11 @@ async def llm_request(req_data: SearchModel):
         return HTTPException(status_code=504, detail="The query took too long to process. Please try again later!")
     except RETRYABLE_TRANSPORT_ERRORS as e:
         logger.error(f"Could not reach Vertex AI: {e!r}")
-        return HTTPException(status_code=503, detail="Failed to process the query. Please try again later!")
+        return HTTPException(status_code=503, detail=FAILED_MESSAGE)
     except (json.JSONDecodeError, EmptyResponseError) as e:
         logger.error(f"Unusable LLM response: {e!r}")
-        return HTTPException(status_code=502, detail="Failed to process the query. Please try again later!")
+        return HTTPException(status_code=502, detail=FAILED_MESSAGE)
     except Exception as e:
         logger.error(f"An unexpected error occurred during LLM processing: {e}")
         traceback.print_exc()
-        return HTTPException(status_code=500, detail="Failed to process the query. Please try again later!")
+        return HTTPException(status_code=500, detail=FAILED_MESSAGE)
