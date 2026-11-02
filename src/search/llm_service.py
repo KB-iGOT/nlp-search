@@ -93,10 +93,10 @@ client = genai.Client(
     http_options=types.HttpOptions(timeout=int(settings.LLM_ATTEMPT_TIMEOUT_SECONDS * 1000)),
 )
 
-# Statuses worth calling the model again for: rate limited, or the service failed
-# on its side. Anything else (bad credentials, a malformed request) is raised on
-# the first attempt, since repeating it would only cost the caller time.
-RETRYABLE_STATUS_CODES = (429, 500, 502, 503, 504)
+# Statuses worth calling the model again for: timed out, rate limited, or the
+# service failed on its side. Anything else (bad credentials, a malformed request)
+# is raised on the first attempt, since repeating it would only cost the caller time.
+RETRYABLE_STATUS_CODES = (408, 429, 500, 502, 503, 504)
 
 # Failures that never reached the model or never finished: httpx's own errors
 # (httpx.TimeoutException is a TransportError), TimeoutError from the per-attempt
@@ -305,7 +305,11 @@ async def search_request(req_data: SearchModel):
 
 def _upstream_status(code: int) -> int:
     """Status for a model error we pass on. 429, 503 and 504 mean the same to our
-    caller as they did to us; any other error is the model failing us, a 502."""
+    caller as they did to us. A 408 is the model timing out, which to our caller is
+    a 504: passed on as is, it would read as the caller's own request being too slow.
+    Any other error is the model failing us, a 502."""
+    if code == 408:
+        return 504
     return code if code in (429, 503, 504) else 502
 
 

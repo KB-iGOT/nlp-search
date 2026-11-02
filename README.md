@@ -83,7 +83,8 @@ pip install uv && uv pip install -r requirements.txt
 
    Each attempt is limited to `LLM_ATTEMPT_TIMEOUT_SECONDS`. An attempt still running at the limit
    is cancelled and retried like any other timeout. Rate limits (`429`), server errors (`500`,
-   `502`, `503`, `504`), timeouts and dropped connections are retried, as is a response that
+   `502`, `503`, `504`), timeouts (including a `408` from Vertex AI) and dropped connections
+   are retried, as is a response that
    arrives but is not readable JSON. Errors the call cannot recover from (bad credentials, an
    invalid request, a response stopped by the safety filters) fail immediately.
 
@@ -95,7 +96,7 @@ pip install uv && uv pip install -r requirements.txt
    |---------------|--------|
    | Vertex AI returned `429`, `503` or `504` | the same status |
    | Vertex AI returned any other error | `502` |
-   | The attempt timed out | `504` |
+   | The attempt timed out, or Vertex AI returned `408` | `504` |
    | Vertex AI could not be reached | `503` |
    | The response was empty (e.g. blocked) or not readable JSON | `502` |
 
@@ -264,7 +265,7 @@ Only `200` carries keywords. Every other status has a body of the form `{"detail
 | `429` | Vertex AI rate limit or quota, after all retries. | Retry later. |
 | `502` | The model failed, or its answer was empty or unreadable. | Retry later. |
 | `503` | Vertex AI could not be reached, or the service is shutting down. | Retry later. |
-| `504` | Every attempt timed out, or Vertex AI itself returned `504`. | Retry later. |
+| `504` | Every attempt timed out, or Vertex AI itself returned `408` or `504`. | Retry later. |
 | `500` | Unexpected error in the service. | Retry later; check the service logs. |
 
 **Example `202` Response**
